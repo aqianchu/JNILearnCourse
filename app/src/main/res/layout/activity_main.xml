@@ -66,6 +66,26 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="native向Java返回List对象" />
+        <Button
+            android:id="@+id/button10"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="对类的静态变量进行操作" />
+        <Button
+            android:id="@+id/button11"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="对类的实例变量进行操作" />
+        <Button
+            android:id="@+id/button12"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="局部引用" />
+        <Button
+            android:id="@+id/button13"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="全局引用" />
     </LinearLayout>
 
 </ScrollView>

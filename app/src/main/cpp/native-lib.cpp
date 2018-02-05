@@ -3,7 +3,7 @@
 #include <string>
 #include <iostream>
 #include <android/log.h>
-
+#include <stdlib.h>
 using namespace std;
 
 #define TAG "myndk"
@@ -14,6 +14,38 @@ using namespace std;
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 // 定义error信息
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG,__VA_ARGS__)
+
+jstring charTojstring(JNIEnv* env, const char* pat) {
+    //定义java String类 strClass
+    jclass strClass = (env)->FindClass("Ljava/lang/String;");
+    //获取String(byte[],String)的构造器,用于将本地byte[]数组转换为一个新String
+    jmethodID ctorID = (env)->GetMethodID(strClass, "<init>", "([BLjava/lang/String;)V");
+    //建立byte数组
+    jbyteArray bytes = (env)->NewByteArray(strlen(pat));
+    //将char* 转换为byte数组
+    (env)->SetByteArrayRegion(bytes, 0, strlen(pat), (jbyte*) pat);
+    // 设置String, 保存语言类型,用于byte数组转换至String时的参数
+    jstring encoding = (env)->NewStringUTF("GB2312");
+    //将byte数组转换为java String,并输出
+    return (jstring) (env)->NewObject(strClass, ctorID, bytes, encoding);
+}
+
+char* jstringToChar(JNIEnv* env, jstring jstr) {
+    char* rtn = NULL;
+    jclass clsstring = env->FindClass("java/lang/String");
+    jstring strencode = env->NewStringUTF("UTF-8");
+    jmethodID mid = env->GetMethodID(clsstring, "getBytes", "(Ljava/lang/String;)[B");
+    jbyteArray barr = (jbyteArray) env->CallObjectMethod(jstr, mid, strencode);
+    jsize alen = env->GetArrayLength(barr);
+    jbyte* ba = env->GetByteArrayElements(barr, JNI_FALSE);
+    if (alen > 0) {
+        rtn = (char*) malloc(alen + 1);
+        memcpy(rtn, ba, alen);
+        rtn[alen] = 0;
+    }
+    env->ReleaseByteArrayElements(barr, ba, 0);
+    return rtn;
+}
 
 extern "C"
 JNIEXPORT jstring
@@ -142,7 +174,7 @@ Java_zqc_com_example_NativeTest_jni2javaMethod4(JNIEnv *env, jobject instance) {
     int len = 3;
     jobjectArray joa = env->NewObjectArray(len, cls, obj);
     for (int i = 0; i < len; ++i) {
-        jobject tmp = env->GetObjectArrayElement(joa,i);
+        jobject tmp = env->GetObjectArrayElement(joa, i);
         env->CallVoidMethod(tmp, setAgeMid, i + 10);
     }
     return joa;
@@ -151,12 +183,103 @@ extern "C"
 JNIEXPORT jobject JNICALL
 Java_zqc_com_example_NativeTest_jni2javaMethod5(JNIEnv *env, jobject instance) {
     jclass listCls = env->FindClass("java/util/ArrayList");//获得ArrayList类引用
-    jmethodID  listCon = env->GetMethodID(listCls, "<init>", "()V");
-    jmethodID addMid = env->GetMethodID(listCls,"add","(Ljava/lang/Object;)Z");
+    jmethodID listCon = env->GetMethodID(listCls, "<init>", "()V");
+    jmethodID addMid = env->GetMethodID(listCls, "add", "(Ljava/lang/Object;)Z");
 
     jobject listObj = env->NewObject(listCls, listCon);
     jobject jperon = Java_zqc_com_example_NativeTest_jni2javaMethod2(env, instance);
     env->CallBooleanMethod(listObj, addMid, jperon);
 
     return listObj;
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_zqc_com_example_NativeTest_jniSetStaticField(JNIEnv *env, jobject instance) {
+    jclass cls = env->GetObjectClass(instance);
+    if (cls == 0) {
+        return;
+    }
+    jfieldID myStaticId = env->GetStaticFieldID(cls, "myStatic", "I");
+    if (myStaticId == 0) {
+        return;
+    }
+    env->SetStaticIntField(cls, myStaticId, 520);
+}extern "C"
+JNIEXPORT void JNICALL
+Java_zqc_com_example_NativeTest_jniSetField(JNIEnv *env, jobject instance) {
+    jclass cls = env->GetObjectClass(instance);
+    if (!cls) {
+        return;
+    }
+    jfieldID nfieldId = env->GetFieldID(cls, "normal", "I");
+    if (!nfieldId) {
+        return;
+    }
+    env->SetIntField(instance, nfieldId, 640);
+    //这里可以删除局部引用，局部引用在作用域结束后自动释放
+    env->DeleteLocalRef(cls);
+}
+
+//局部引用：1.循环体内创建的局部引用，要在循环体内就直接释放了。
+//2. 编写的工具函数，里面创建的局部引用，要在该工具函数里面释放了。
+//3. 局部引用引用了一个大的Java对象，这时候一定一定要早点释放了。
+//4. 局部引用不要缓存在native层
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_zqc_com_example_NativeTest_jniLocalRef(JNIEnv *env, jobject instance) {
+    //1. 局部引用不要存储在static变量中，即使存了下次也不能用
+    //static jclass cls;
+    //以下创建的局部引用都放入到栈中
+    env->PushLocalFrame(16);
+    jclass cls;
+    if (!cls) {//这里就错误了，前一次方法完成后jvm会释放局部引用，这里static存的值仅第一次有效
+        cls = env->GetObjectClass(instance);//这里的cls是局部引用
+    }
+
+    //删除栈里面的局部引用
+    env->PopLocalFrame(NULL);
+    env->EnsureLocalCapacity(20);//将本地引用的最大限制改为20
+    //下面可以进行其他操作。。。
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_zqc_com_example_NativeTest_jniGlobalRef(JNIEnv *env, jobject instance) {
+    static jobject obj;
+    static jclass pCls;
+    if (obj) {//第二次点击时，这里就不会空
+        //由于obj和personCls被保存为全局引用了，所有这里使用仍然有效
+        jmethodID getId = env->GetMethodID(pCls, "getName", "()Ljava/lang/String;");
+        jstring name = (jstring) env->CallObjectMethod(obj, getId);
+        LOGE("obj is not null, name:%s", jstringToChar(env, name));
+        return;
+    }
+    if (!pCls) {//为空就去新建
+        jclass tmpCls = env->FindClass("zqc/com/example/Person");
+        pCls = (jclass) env->NewGlobalRef(tmpCls);
+        env->DeleteLocalRef(tmpCls);
+    }
+    jmethodID conMid = env->GetMethodID(pCls, "<init>", "()V");
+    jobject tmpObj = env->NewObject(pCls, conMid);
+    jmethodID setId = env->GetMethodID(pCls, "setName", "(Ljava/lang/String;)V");
+    env->CallVoidMethod(tmpObj, setId, env->NewStringUTF("看看姓名"));
+    obj = env->NewGlobalRef(tmpObj);
+    env->DeleteLocalRef(tmpObj);
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_zqc_com_example_NativeTest_jniWeakGlobalRef(JNIEnv *env, jobject instance) {
+    static jclass pCls;
+    if (!pCls) {
+        jclass tmpCls = env->FindClass("zqc/com/example/Person");
+        pCls = (jclass) env->NewWeakGlobalRef(tmpCls);
+        env->DeleteLocalRef(tmpCls);
+    }
+    //除了第一次需要FindClass外，在没有回收pCls之前都可以使用
+
+    //这里使用...
+
+    //可以手动释放
+    //env->DeleteWeakGlobalRef(pCls);
 }
