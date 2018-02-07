@@ -34,6 +34,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         findViewById(R.id.button11).setOnClickListener(this);
         findViewById(R.id.button12).setOnClickListener(this);
         findViewById(R.id.button13).setOnClickListener(this);
+        findViewById(R.id.button14).setOnClickListener(this);
     }
 
     @Override
@@ -123,6 +124,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.button13:
                 test.jniGlobalRef();
+                break;
+            case R.id.button14:
+                test.jniOnLoadTest();
+                Person person1 = new Person();
+                person1.setName("天霸");
+                String tt = test.jniOnload1(person1);
+                Log.e("myndk", "tt:" + tt);
                 break;
         }
     }

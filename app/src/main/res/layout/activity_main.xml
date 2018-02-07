@@ -86,6 +86,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="全局引用" />
+        <Button
+            android:id="@+id/button14"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="JNI_OnLoad" />
     </LinearLayout>
 
 </ScrollView>

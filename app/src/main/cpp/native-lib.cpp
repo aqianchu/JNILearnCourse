@@ -15,19 +15,31 @@ using namespace std;
 // 定义error信息
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,TAG,__VA_ARGS__)
 
+////define __USE_ANDROID_LOG__ in makefile to enable android log
+//#if defined(__ANDROID__) && defined(__USE_ANDROID_LOG__)
+//#include <android/log.h>
+//#define LOGV(...)   __android_log_print((int)ANDROID_LOG_VERBOSE, "ST_jni", __VA_ARGS__)
+//#define LOGE(msg)  __android_log_print((int)ANDROID_LOG_ERROR, "ST_jni_dbg", "line:%3d %s", __LINE__, msg)
+//#define LOGDBG(fmt, ...) __android_log_print((int)ANDROID_LOG_DEBUG, "ST_jni_dbg", "line:%3d " fmt, __LINE__, __VA_ARGS__)
+//#else
+//#define LOGV(...)
+//#define LOGE(fmt)
+//#define LOGDBG(fmt, ...)
+//#endif
+
 jstring charTojstring(JNIEnv* env, const char* pat) {
     //定义java String类 strClass
-    jclass strClass = (env)->FindClass("Ljava/lang/String;");
+    jclass strClass = env->FindClass("java/lang/String");
     //获取String(byte[],String)的构造器,用于将本地byte[]数组转换为一个新String
-    jmethodID ctorID = (env)->GetMethodID(strClass, "<init>", "([BLjava/lang/String;)V");
+    jmethodID ctorID = env->GetMethodID(strClass, "<init>", "([BLjava/lang/String;)V");
     //建立byte数组
-    jbyteArray bytes = (env)->NewByteArray(strlen(pat));
+    jbyteArray bytes = env->NewByteArray(strlen(pat));
     //将char* 转换为byte数组
-    (env)->SetByteArrayRegion(bytes, 0, strlen(pat), (jbyte*) pat);
+    env->SetByteArrayRegion(bytes, 0, strlen(pat), (jbyte*) pat);
     // 设置String, 保存语言类型,用于byte数组转换至String时的参数
-    jstring encoding = (env)->NewStringUTF("GB2312");
+    jstring encoding = env->NewStringUTF("UTF-8");
     //将byte数组转换为java String,并输出
-    return (jstring) (env)->NewObject(strClass, ctorID, bytes, encoding);
+    return (jstring) env->NewObject(strClass, ctorID, bytes, encoding);
 }
 
 char* jstringToChar(JNIEnv* env, jstring jstr) {
@@ -282,4 +294,69 @@ Java_zqc_com_example_NativeTest_jniWeakGlobalRef(JNIEnv *env, jobject instance) 
 
     //可以手动释放
     //env->DeleteWeakGlobalRef(pCls);
+}
+
+void onLoadTest() {
+    LOGE("调到我啦");
+}
+
+jstring onloadTest1(JNIEnv *env, jobject instance, jobject obj) {
+    jclass pCls = env->GetObjectClass(obj);
+    jfieldID nameFid = env->GetFieldID(pCls, "name", "Ljava/lang/String;");
+    jstring name = (jstring) env->GetObjectField(obj, nameFid);
+    char *cname = jstringToChar(env, name);
+    char *tmp = new char[100];
+    sprintf(tmp, "我来自Native，我叫：%s", cname);
+    jstring result = charTojstring(env, tmp);
+    return result;
+}
+//注册函数映射
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv *pEnv = NULL;
+    //获取环境
+    jint ret = vm->GetEnv((void**) &pEnv, JNI_VERSION_1_6);
+    if (ret != JNI_OK) {
+        LOGE("jni_replace JVM ERROR:GetEnv");
+        return -1;
+    }
+
+    JNINativeMethod g_Methods[] = {{"jniOnLoadTest", "()V", (void*) onLoadTest},
+                                   {"jniOnload1", "(Lzqc/com/example/Person;)Ljava/lang/String;", (jstring*)onloadTest1}
+    };
+    jclass cls = pEnv->FindClass("zqc/com/example/NativeTest");
+    if (cls == NULL) {
+        LOGE("FindClass Error");
+        return -1;
+    }
+    //动态注册本地方法
+    ret = pEnv->RegisterNatives(cls, g_Methods,sizeof(g_Methods) / sizeof(g_Methods[0]));
+    if (ret != JNI_OK) {
+        LOGE("Register Error");
+        return -1;
+    }
+    //返回java版本
+    return JNI_VERSION_1_6;
+}
+
+static bool
+unBindNative(JNIEnv *env) {
+    jclass clazz;
+    clazz = env->FindClass("zqc/com/example/NativeTest");
+    if (clazz == NULL) {
+        return false;
+    }
+    return env->UnregisterNatives(clazz) == 0;
+}
+
+//卸载函数映射
+JNIEXPORT void JNICALL
+JNI_OnUnload(JavaVM *vm, void *reserved) {
+    JNIEnv *env = NULL;
+    jint result = -1;
+
+    if (vm->GetEnv((void **) &env, JNI_VERSION_1_6) != JNI_OK) {
+        return;
+    }
+    bool res = unBindNative(env);
+    LOGE("unbind result is %s", res ? "ok" : "error");
 }

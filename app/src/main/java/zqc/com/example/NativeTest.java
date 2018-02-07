@@ -47,4 +47,8 @@ public class NativeTest {
     public native void jniGlobalRef();
     //弱全局引用
     public native void jniWeakGlobalRef();
+
+    //JNI_OnLoads使用实例
+    public native void jniOnLoadTest();
+    public native String jniOnload1(Person person);
 }
